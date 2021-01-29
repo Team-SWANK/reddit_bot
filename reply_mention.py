@@ -15,6 +15,7 @@ else:
         posts_replied_to = posts_replied_to.split('\n')
         posts_replied_to = list(filter(None, posts_replied_to))
 
+#retrieve list of account mentions
 mentions = reddit.inbox.mentions()
 for mention in mentions:
     if mention.id not in posts_replied_to:
@@ -27,6 +28,6 @@ for mention in mentions:
 
 # Write our updated list back to the file
 
-#with open('posts_replied_to.txt', 'w') as f:
-#    for post_id in posts_replied_to:
-#        f.write(post_id + '\n')
+with open('posts_replied_to.txt', 'w') as f:
+    for post_id in posts_replied_to:
+        f.write(post_id + '\n')
