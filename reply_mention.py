@@ -37,21 +37,32 @@ for mention in mentions:
         print("Comment_id:", mention.id)
         #
         #if (parent.url).endswith(('jpg', 'jpeg', 'png')): #this only works if the post ends with what's in the tuple
-        if '.jpg' or '.jpeg' or '.png' in parent.url:
+        if '.jpg' or '.jpeg' or '.png' or ".jfif" in parent.url:
         #this works with the case where the image might have some specific formatand doesn't end in .jpg...
             image_URL = parent.url
-            if ('.jpg' or '.jpeg' or '.png' in parent.selftext) and len(parent.selftext) != 0:
+            images = [parent.url]
+            if ('.jpg' or '.jpeg' or '.png' or ".jfif" in parent.selftext) and len(parent.selftext) != 0:
                 '''
               Had to account for the case where for some reason the keys would be foud in the selftext, but the
               selftext was actually empty. Also had to work around whether or not somebody adds text to the original post.
               Also had to work around when someone puts a caption to the image, there is an extra ')' at the end.
               This might break if somebody posts other links in a post with an image in it.
                 '''
-                image_URL = parent.selftext.split("https://")[1].strip(')')
-            message += "\n\nImage found! \n\nImage URL: " + image_URL # a double \n, marks for a newline in reddit
+                images = []
+                num_images = parent.selftext.count("https://") #check how many links we have total in the text
+
+                for i in range(num_images):
+                    unstripped_URL = parent.selftext.split("https://")[1] #for each link, take the split section with the actual part of the link (caption removed)
+                    image_URL = unstripped_URL.split(')')[0] #strip the closing' ) ' and the rest of remaining selftext
+                    if '.jpg' or '.jpeg' or '.png' or ".jfif" in image_URL: #use this to confirm it's a link to an image, and not to another site
+                        images.append(image_URL) #add it to our list of links to print
+
+            message += "\n\nImage found! \n\nImage URL(s): " + str(images) # a double \n, marks for a newline in reddit
         else:
             message += "\n\nNo Image found in post!"
-        print("Selftext:",parent.selftext)
+
+        print("***Selftext:",parent.selftext)
+        print("\n***")
         print("Permalink:",parent.permalink)
         #mention.reply(message)
         '''
