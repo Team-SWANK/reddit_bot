@@ -58,7 +58,8 @@ for mention in mentions:
         there is a limit to how often you can do this
         comment the mention.reply line when testing, and only want to see prints
         '''
-        print(message)
+        print("***Message:\n", message)
+        print("\nEnd of Message***")
         print("=============================\n\n")
         # Store the current id into our list
         #posts_replied_to.append(parent_id) #comment out when testing

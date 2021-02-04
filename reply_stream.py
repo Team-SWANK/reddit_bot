@@ -6,7 +6,7 @@ reddit = praw.Reddit('reddit-bot')
 while True:
     i = 0 #counting and printing how many comments the stream has visited
     for comment in reddit.subreddit("all").stream.comments():
-        print(i)
+        print("iteration:",i)
         i += 1
         if re.search('u/PhotoSenseBot', comment.body, re.IGNORECASE):
 
