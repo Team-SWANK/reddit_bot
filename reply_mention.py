@@ -1,5 +1,8 @@
 import praw
 import os
+
+#gives link to a gallery, but not to the individual images
+
 # Create the reddit instance
 reddit = praw.Reddit('reddit-bot')
 
@@ -28,14 +31,14 @@ for mention in mentions:
         message = "python is statically and dynamically typed ~"
         parent = reddit.submission(id=parent_id)
 
-        #for debugging/testing purposes
+        ###for debugging/testing purposes
         print("\nmention found")
         print('Bot replying to: ', mention.body)
 
         print("Parent URL: ", parent.url)
         print("Parent_id:", parent_id)
         print("Comment_id:", mention.id)
-        #
+        ###
         #if (parent.url).endswith(('jpg', 'jpeg', 'png')): #this only works if the post ends with what's in the tuple
         if '.jpg' or '.jpeg' or '.png' or ".jfif" in parent.url:
         #this works with the case where the image might have some specific formatand doesn't end in .jpg...
@@ -68,7 +71,7 @@ for mention in mentions:
 
         print("***Message:\n", message)
         print("\nEnd of Message***")
-        
+
         print("=============================\n\n")
         ##
         # mention.reply(message)
