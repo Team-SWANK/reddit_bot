@@ -21,7 +21,7 @@ class reddit_bot:
                 loc = text.find(flag) #this implementation will only return the index of the first instance of our string
                             #if we really want to, we can count all instance, and check all instances
                 if loc != 0 and text[loc-1] == '-':
-                    print("Flag found: -\n",flag,"")
+                    print("\nFlag found: -",flag,"")
                     flag_messages += "\n\n\nFlag found: -" + flag
         return flag_messages
 
@@ -41,8 +41,9 @@ class reddit_bot:
                 # this works with the case where the image might have some specific formatand doesn't end in .jpg...
                 image_URL = parent.url
                 images.append(parent.url)
+                message += "\n\nImage found! \n\nImage URL(s): " + str(images)  # a double \n, marks for a newline in reddit
 
-            if ('.jpg' or '.jpeg' or '.png' or ".jfif" in parent.selftext) and len(parent.selftext) != 0:
+            elif ('.jpg' or '.jpeg' or '.png' or ".jfif" in parent.selftext) and len(parent.selftext) != 0:
                     '''
                 Had to account for the case where for some reason the keys would be foud in the selftext, but the
                   selftext was actually empty. Also had to work around whether or not somebody adds text to the original post.
@@ -61,10 +62,9 @@ class reddit_bot:
                             images.append(image_URL)  # add it to our list of links to print
                     print(type(mention))
                     message += "\n\nImage found! \n\nImage URL(s): " + str(images)  # a double \n, marks for a newline in reddit
-                    message += self.parse_flags(str(mention.body))
             else:
                 message += "\n\nNo Image found in post!"
-
+            message += self.parse_flags(str(mention.body))
             print("***Message:\n", message)
             print("\nEnd of Message***")
             print("=============================\n\n")
