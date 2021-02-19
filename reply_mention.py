@@ -32,6 +32,10 @@ class reddit_bot:
                 loc = text.find(flag) #this implementation will only return the index of the first instance of our string
                 if loc != 0 and text[loc-1] == '-':
                     flag_messages += "\n\n\nFlag found: -" + flag
+        if "cmds" in flag_messages:
+            flag_messages +="\n\n\nAll COMMANDS: \n\n\n"
+            for flag in test_list:
+                flag_messages+="-"+flag+"\n\n\n"
         return flag_messages
 
     def checkout_mention(self, mention):
