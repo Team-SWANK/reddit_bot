@@ -9,22 +9,38 @@ class reddit_bot:
         self.reddit = praw.Reddit("reddit-bot")
         self.mentions = self.reddit.inbox.mentions
         self.stream = praw.models.util.stream_generator(self.mentions, skip_existing=True)
-
+        self.info = "\n\n\nPhotoSense is a set of online tools that give people the ability to protect their privacy. " \
+                    "In modern movements, many activists and journalists are using the internet to upload images of protests and " \
+                    "other politically charged mass gatherings. However, those who upload their images online may be " \
+                    "susceptible to threats, job loss, and physical assault. PhotoSense addresses " \
+                    "this issue by providing twitter and reddit bots, a browser extension, and a web application for users" \
+                    " to edit and upload censored images online. PhotoSense is not only an application, it is a movement." \
+                    " We strive to emphasize the invaluable rights to peacefully gather, while maintaining the security " \
+                    "of privacy. In order to further this movement, PhotoSense provides its users with a Google Chrome " \
+                    "Extension, as well as Reddit and Twitter bots. The Google Chrome Extension can be accessed by " \
+                    "clicking the link in the top navigation bar of our web application. " \
+                    "The Reddit social media bot can be utilized by anyone who wants to spread this movement " \
+                    "by using the appropriate hashtags (u/PhotoSenseBot) and flag commands. Enter ' -cmds ' while mentioning " \
+                    "this bot to retrieve a list of flag commands."
     def parse_flags(self, text):
         flag_messages = ""
-        flag_list = [] #this will hold all flags that we want to use
+        flag_list = ["cmds"] #this will hold all flags that we want to use
         flag_descriptions = [] #this will hold all flag description or names by index for the bot to respond with
-        test_list = ["ab","cd","ef","ps","a"]#list of flags for testing responses
+        test_list = ["ab","cd","ef","ps","a","cmds"]#list of flags for testing responses
         for flag in test_list:
             if flag in text:
                 loc = text.find(flag) #this implementation will only return the index of the first instance of our string
                 if loc != 0 and text[loc-1] == '-':
                     flag_messages += "\n\n\nFlag found: -" + flag
+        if "cmds" in flag_messages:
+            flag_messages +="\n\n\nAll COMMANDS: \n\n\n"
+            for flag in test_list:
+                flag_messages+="-"+flag+"\n\n\n"
         return flag_messages
 
     def checkout_mention(self, mention):
         parent_id = mention.parent()
-        message = "python is statically and dynamically typed ~"
+        message = ""
         parent = self.reddit.submission(id=parent_id)
         images = []
         try:
@@ -52,14 +68,14 @@ class reddit_bot:
                             images.append(image_URL)  # add it to our list of links to print
 
                     print(type(mention))
-                    message += "\n\nImage found! \n\nImage URL(s): " + str(images)  # a double \n, marks for a newline in reddit
+                    message += "\n\nImage(s) found! \n\nImage URL(s): " + str(images)  # a double \n, marks for a newline in reddit
             else:
                 message += "\n\nNo Image found in post!"
             message += self.parse_flags(str(mention.body))
-
+            message += "\n\n\n"+self.info
         except Exception as e:
             print(e.__traceback__)
-            return "This bot does not reply to image links in comments! Only to initial image posts! :)", parent_id
+            return "This bot does not reply to image links in comments! Only to initial image posts! :)"+ "\n\n\n"+self.info, parent_id,
 
         return message, parent_id
 
