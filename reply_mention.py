@@ -1,17 +1,11 @@
 import praw
-import os
-import time
 #gives link to a gallery, but not to the individual images
 
 # Create the reddit instance
 class reddit_bot:
     def __init__(self):
         self.reddit = praw.Reddit("reddit-bot")
-        self.mentions = self.reddit.inbox.mentions
-        #self.comments = self.reddit.inbox.comment_replies()
         self.comments = self.reddit.inbox.unread(limit=None)
-        self.stream_c = praw.models.util.stream_generator(self.comments, skip_existing=True, pause_after = 1)
-        self.stream = praw.models.util.stream_generator(self.mentions, skip_existing=True, pause_after = 1)
         self.info = "\n\n\nPhotoSense is a set of online tools that give people the ability to protect their privacy. " \
                     "In modern movements, many activists and journalists are using the internet to upload images of protests and " \
                     "other politically charged mass gatherings. However, those who upload their images online may be " \
@@ -94,7 +88,6 @@ class reddit_bot:
                         if '.jpg' or '.jpeg' or '.png' or ".jfif" in image_URL:  # use this to confirm it's a link to an image, and not to another site
                             images.append(image_URL)  # add it to our list of links to print
 
-                    print(type(mention))
                     message += "\n\nImage(s) found! \n\nImage URL(s): " + str(images)  # a double \n, marks for a newline in reddit
             else:
                 message += "\n\nNo Image found in post!"
@@ -113,6 +106,8 @@ class reddit_bot:
         there is a limit to how often you can do this
         comment the mention.reply line when testing, and only want to see prints
         '''
+
+    #deletes a post if
     def delete_post(self,mention):
         print("===Deleting response===")
         sub = mention.submission #returns the submission object
@@ -122,6 +117,8 @@ class reddit_bot:
         if((mention.author == sub_auth) or (mention.author == init_mentioner)) and (comm_to_del.author == "PhotoSenseBot"):
             comm_to_del.delete() # will be comm_to_del.delete()
             print("Successfully removed!")
+        else: print("Unsuccessful removal!")
+        return
 
     #deletes all unread comments waiting in the unread stream
     def mark_r(self):
@@ -137,71 +134,21 @@ class reddit_bot:
 
     def run(self):
         print("Bot running...")
-        self.mark_r()
+        self.mark_r() #prevents responding to comments that were made while bot was asleep
 
-        id = None #used to compare if the mention is the same as the comment
         while(True):
-
-            for mention in self.stream:
-                print("M")
-                if mention:
-                    print(type(mention))
-                    print("Mention")
-                    msg,pid = self.checkout_mention(mention)
-                    print("***Message:\n", msg,"\nEnd of Message***=============================\n\n")
-                    if(len(msg) > 0):
-                         self.reply(mention, msg)
-                         id = mention.id
-                break
-
             self.comments = self.reddit.inbox.unread(limit=None)
             #must reinstantiate the unread stream or else it won't enter loop below
 
             for comment in self.comments:
-                print("C")
-                if id == comment.id:
-                    self.reddit.inbox.mark_read([comment])
-                    break
-
-                if comment and (id != comment.id) and isinstance(comment,praw.models.reddit.comment.Comment) and ("u/PhotoSenseBot" in comment.body) :
-                    print("Comment: ",comment.id,"===", id)
-                    msg,pid = self.checkout_mention(comment)
+                if comment and isinstance(comment,praw.models.reddit.comment.Comment) and ("u/PhotoSenseBot" in comment.body) :
+                    msg,_ = self.checkout_mention(comment)
                     print("***Message:\n", msg, "\nEnd of Message***=============================\n\n")
                     if (len(msg) > 0):
                         self.reply(comment, msg)
                     self.reddit.inbox.mark_read([comment])
                 break
 
-
-    def run2(self):
-        print("Bot running...")
-        while(True):
-            print("While")
-            end_timer = time.time()+1
-            if praw.models.reddit.comment.Comment in self.stream:
-                print("M")
-                for mention in self.stream:
-                    print(type(mention))
-                    print("Mention")
-                    msg = self.checkout_mention(mention)
-                    print("***Message:\n", msg,"\nEnd of Message***=============================\n\n")
-                    if(len(msg) > 0):
-                        self.reply(mention, msg)
-                    if(time.time() > end_timer):
-                        break
-            elif praw.models.reddit.comment.Comment in self.stream_c:
-                print("C")
-                for comment in self.comments:
-                    print("Comment")
-                    end_timer = time.time() + 1
-                    msg = self.checkout_mention(comment)
-                    print("***Message:\n", msg, "\nEnd of Message***=============================\n\n")
-                    if (len(msg) > 0):
-                        self.reply(comment, msg)
-                    if (time.time() > end_timer):
-                        break
-
-        print("here")
 
 def main():
     bot = reddit_bot()
