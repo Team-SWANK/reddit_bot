@@ -1,1 +1,4 @@
 praw.ini
+imgur_auth.ini
+.env
+__pycache__
