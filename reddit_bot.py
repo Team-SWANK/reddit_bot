@@ -1,16 +1,18 @@
-import logging, os, io, base64, requests
+import logging, os, io, base64, requests, sys
 import praw
 import pyimgur
 import numpy as np
 import urllib.request
 from PIL import Image
-from imgur_auth import get_client_id
-from dotenv import load_dotenv
+sys.path.insert(1, '/imgur')
+from imgur.imgur_auth import get_client_id
+from dotenv import load_dotenv, find_dotenv
 
-load_dotenv( dotenv_path='/.env', encoding='utf-8' )
+load_dotenv(dotenv_path=find_dotenv())
 
 segment_url = os.getenv("SEGMENT_URL")
 censor_url = os.getenv("CENSOR_URL")
+web_app_url = os.getenv("WEB_APP_URL")
 
 # Create the reddit instance
 class reddit_bot:
@@ -19,10 +21,8 @@ class reddit_bot:
         self.comments = self.reddit.inbox.unread(limit=None)
         self.info = "\n\n\nPhotoSense is a set of online tools that give people the ability to protect their privacy. " \
                     "The Reddit social media bot can be utilized by anyone who wants to spread this movement " \
-                    "by using the appropriate hashtags (u/PhotoSenseBot) and flag commands. Enter ' -cmds ' while mentioning " \
-                    "this bot to retrieve a list of flag commands."
-        self.invoking_commands_message = "\n\nEnsure that a dash is placed before listing the commands. Invoke the bot using "\
-                    "u/PhotoSenseBot -cmds for a list of commands, including examples of how a bot can be invoked."
+                    "by using the appropriate hashtags (u/PhotoSenseBot) and flag commands. Enter 'u/PhotoSenseBot cmds' " \
+                    "to retrieve a list of flag commands."
 
     #As of right now this only serves to return the image_urls and flags for the webapp to process
     def send_to_webapp(self, image_urls, flags):
@@ -40,138 +40,146 @@ class reddit_bot:
         flags = {
             'cmds': 'view bot commands',
             'rmv': 'remove parent comment with censored image',
-            'px': 'apply pixelsorting algorithm to image',
-            'sb': 'apply simple blurring algorithm to image', 
-            'pz': 'apply pixelization algorithm to image',
-            'bb': 'apply black bar censoring to image',
-            'fi': 'apply fill in censoring to image',
+            'px': 'apply the pixel sorting algorithm',
+            'sb': 'apply the simple blurring algorithm', 
+            'pz': 'apply the pixelization algorithm',
+            'bb': 'apply the black bar censoring algorithm',
+            'fi': 'apply the fill in censoring algorithm',
         } 
-        flag_descriptions = flags.values() 
-
+        
         if "cmds" in text:
+            flag_descriptions = flags.values() 
             flags_found.append('cmds')
-            flag_messages += "\n\n All Image Censoring Commands \n\n"
-            
+
+            # instantiate a message response for displaying all commands
+            flag_messages += "\n\nAll Image Censoring Commands\n\n"
             for flag in flags.keys():
                 description = flags.get(flag)
-                flag_messages += "(-" + flag +")" + " " + description + "\n\n"
+                flag_messages += "(" + flag +")" + " " + description + "\n"
 
-            flag_messages += "The following example invokes the bot to return a censored image using " \
-                "the pixel sorted algorithm: u/PhotoSenseBot -px" + "\n\n"
-            flag_messages += "Multiple censoring algorithms can be used as long as they are inserted after the dash. " \
-                "The following example invokes the bot to return a censored image using multiple commands: u/PhotoSenseBot -px sb px"
-        elif '-' in text:
-            # gets command without 'u/PhotoSenseBot'
-            command =  text.split('u/PhotoSenseBot \\')[1] 
-            dash_index = 0
+            flag_messages += "\nThe following example invokes the bot to return a censored image using " \
+                "the pixel sorting algorithm: u/PhotoSenseBot px \n" 
+            flag_messages += "Multiple censoring algorithms can be used as well. " \
+                "The following example invokes the bot to return a censored image using multiple commands: u/PhotoSenseBot px sb pz"     
+        else:
+            arr = text.split()
+            if('u/PhotoSenseBot' in arr): 
+                arr.remove('u/PhotoSenseBot')
 
-            # ensure commands are listed after the dash mark
-            if '-' in command[dash_index]:
-                # skip the 'cmds' command and start with the second key in flags instead
-                start_index = 1 
-                # append all flags that exist in the command 
-                for flag in flags.keys()[start_index:]:
-                    if flag in command:
-                        description = flags.get(flag)
-                        flag_messages += "\n\nFlag found: (-" + flag + ") " + description
-                        flags_found.append(flag)
-            else: 
-                flag_messages += self.invoking_commands_message
-        else: 
-            print('No flags were found')
-            flag_messages += self.invoking_commands_message
+            for i in range(len(arr)): 
+                arr[i] = arr[i].lower()
+
+            if 'px' in arr:
+                flags_found.append("pixel_sort")
+            if 'pz' in arr:
+                flags_found.append("pixelization")
+            if 'sb' in arr:
+                flags_found.append("gaussian_blur")
+            if 'bb' in arr:
+                flags_found.append("black_bar")
+            if 'fi' in arr:
+                flags_found.append("fill_in")
+            if 'rmv' in arr:
+                flags_found.append("remove")
+            
+            if(len(flags_found) == 0): 
+                flag_messages += "\n" + self.info
         
-        return flag_messages,flags_found
+        return flag_messages, flags_found
 
     '''
     Checks the mention and parses through to find the image in the parent post. All image url's are extracted, and 
     the body is parsed for flags. Also does the main assessment for what the reply text will be.
     '''
     def checkout_mention(self, mention):
-        print("=======MENTION FOUND======")
         parent_id = mention.parent()
-        message = ""
         parent = self.reddit.submission(id=parent_id)
-        images = []
-        flag_msg, flags = self.parse_flags(str(mention.body))
 
-        if "rmv" in flags:
-            print("comment ID: ", mention.id)
-            self.delete_post(mention)
-            return "", mention.id
+        message = ""
+        images = []
+
+        # determine if the bot was mentioned in a submission that has an image 
         try:
             keys = ['.jpg', '.jpeg', '.png', '.jfif', 'gallery']
-            if any (key in parent.url for key in keys):
-                print('parent url: ' + parent.url)
-                # if user enters multiple images
-                if('gallery' in parent.url): 
-                    print('found gallery instance')
-                    gallery_data = parent.media_metadata
-                    message, images = self.get_images_from_gallery(gallery_data)
-                # if user enters a single image
-                else: 
-                    images.append(parent.url)
-                    message += "\nImage found! \nImage URL(s): " + str(images)  # a double \n, marks for a newline in reddit
+            text_only_post = parent.is_self
 
-            elif any (key in parent.selftext for key in keys):
-                    '''
-                    Had to account for the case where for some reason the keys would be foud in the selftext, but the
-                    selftext was actually empty. Also had to work around whether or not somebody adds text to the original post.
-                    Also had to work around when someone puts a caption to the image, there is an extra ')' at the end.
-                    This might break if somebody posts other links in a post with an image in it.
-                    '''
-                    images = [] #reset images
-                    num_images = parent.selftext.count("https://")  # check how many links we have total in the text
-                    selftext = parent.selftext
-                    print("selftext: ",selftext,"\n***")
-                    print('***end of selftext***')
-
-                    if('gallery' in parent.selftext): 
-                        print('detected gallery')
-                    else:
-                        for i in range(num_images):
-                            unstripped_URL = selftext.split("https://")[i+1]  # for each link, take the split section with the actual part of the link (caption removed)
-                            print('unstripped url: ' + unstripped_URL)
-                            image_URL = unstripped_URL.split(')')[0]  # strip the closing' ) ' and the rest of remaining selftext
-                            print('image url: ' + image_URL)
-                            if '.jpg' or '.jpeg' or '.png' or ".jfif" in image_URL:  # use this to confirm it's a link to an image, and not to another site 
-                                images.append("https://"+image_URL)  # add it to our list of links to print
-
-                    message += "\n\nImage(s) found! \n\nImage URL(s): " + str(images)  # a double \n, marks for a newline in reddit
-            else:
-                message += "\n\nNo Image found in post!"
-            message += flag_msg
-            message += "\n\n"+self.info
+            # determine the reddit post type: text, image/video, url
+            if text_only_post:
+                selftext = parent.selftext
+                # check if an image was posted in the text
+                if any (key in selftext for key in keys):
+                    num_images = parent.selftext.count("https://") # check how many links we have total in the text 
+                    
+                    for i in range(num_images):
+                        unstripped_URL = selftext.split("https://")[i+1]  # for each link, take the split section with the actual part of the link (caption removed)
+                        image_URL = unstripped_URL.split(')')[0]  # strip the closing' ) ' and the rest of remaining selftext
+                        if '.jpg' or '.jpeg' or '.png' or ".jfif" in image_URL:  # use this to confirm it's a link to an image, and not to another site 
+                            images.append("https://"+image_URL)  # add it to our list of links to print
+            else: 
+                # check if an image was posted in the url 
+                if any (key in parent.url for key in keys):
+                    # if user enters multiple images aka 'gallery' in reddit
+                    if('gallery' in parent.url): 
+                        gallery_data = parent.media_metadata
+                        images = self.get_images_from_gallery(gallery_data)
+                    # if user enters a single image
+                    else: 
+                        images.append(parent.url)
+            
         except Exception as e:
             print(e.__traceback__)
-            return "This bot does not reply to image links in comments! Only to initial image posts! :)"+ "\n\n\n"+self.info, parent_id,
+            return "This bot does not reply links in comments! Only to initial image posts! :)"+ "\n\n\n"+self.info, parent_id,
 
-        return message,parent_id,images
+        if(len(images) == 0): 
+            print("no image was found") 
+            message += "\n\nNo image was found\n\n"
+            mention.reply(message)
+            return "", mention.id, [], []
+        else: 
+            comment_body = str(mention.body)
+            flag_msg, flags = self.parse_flags(comment_body)
+
+            if "remove" in flags:
+                print("Deleting post: ", mention.id)
+                self.delete_post(mention)
+                return "", mention.id, [], []
+            else:
+                message += flag_msg 
+                return message, parent_id, images, flags
+
 
     def get_images_from_gallery(self, data):
         images = [] 
-        msg = ''
         if(len(data) > 0): 
             for media_id in data:
                 image_data = data[media_id]
                 if image_data['e'] == 'Image':
                     image_url = image_data['p'][-1]['u'] # Get most high quality image url (last one that appears in the link list)
                     images.append(image_url)
-
-            msg += "\nImage found! \nImage URL(s): " + str(images)  # a double \n, marks for a newline in reddit
-        else:
-            msg += "\nNo image was found\n"
         
-        return msg, images
+        return images
 
-    #Sends a reply through reddit
-    def reply(self, mention, message, images):
-        imgur_links = []
-        if(len(images) > 0):
-            i = 0 
+    # Sends a reply through reddit
+    def reply(self, mention, message, images, flags):
+        # respond with all commands
+        if('cmds' in flags or len(flags) == 0):
+            print(message)
+            # mention.reply(message)   
+        else:  
+            imgur_links = []
             file_names = []
-            for image in images: 
-                print('image: ' + image) 
+            temp_images = [] 
+
+            temp_censor_url = censor_url
+            total_flags = len(flags)
+            # instantiate temp censor url according to flags set by user 
+            for i in range(total_flags):
+                if(i == total_flags - 1): 
+                    temp_censor_url += flags[i] + "]"
+                else: 
+                    temp_censor_url += flags[i] + ", "
+
+            for i in range(len(images)): 
                 temp_image = 'temp' + str(i) + '.jpg'
                 temp_mask_image = 'mask' + str(i) + '.jpg'
                 temp_censored_image = 'censored' + str(i) + '.jpg'
@@ -183,14 +191,18 @@ class reddit_bot:
                 files = {'image': open(temp_image, 'rb')}
                 res = requests.post(segment_url, files=files).json()
                 print('completed segmentation request')
+                # add a temp image to be used later in case user wants to edit segmentations via web app
+                temp_images.append(temp_image)
 
-                # Convert each segmentation to image file and call censoring api
+                # Convert each segmentation to an image file 
                 mask_to_image(res["predictions"]).save(temp_mask_image)
                 files = {'image': open(temp_image, 'rb'), 'mask': open(temp_mask_image, 'rb')}
-                res = requests.post(censor_url, files=files)
+
+                # Call the censorship api
+                res = requests.post(temp_censor_url, files=files)
                 print('completed censoring request')
 
-                # Convert base64 response to image file 
+                # Convert base64 response file 
                 if res.status_code == 200: 
                     fn = temp_censored_image
                     img_bytes = res.json()['ImageBytes'].encode()
@@ -200,33 +212,31 @@ class reddit_bot:
                     file_names.append(fn)
                 else:
                     print('response status was not equal to 200')
-                
-
-            print('files names: \n')
-            print(file_names)
 
             if(len(file_names) > 0): 
-                print('hello')
                 # Upload image to imgur
                 imgur_links = upload_to_imgur(file_names)
-                print('imgur links: ')
+                original_image_links = upload_to_imgur(temp_images)
+
+                print('Here are your censored images ')
                 print(imgur_links)
-                message += '\n\n Imgur Links: ' + str(imgur_links)
+                print('If you are dissatisfied with an image segmentation(s), click one of the links')
+                print('below to edit an image segmentation using the PhotoSense web app')
+                
+                re_edit_images_links = []
+                for original_image in original_image_links: 
+                    re_edit_images_links.append(web_app_url + original_image)
+                
+                print(re_edit_images_links)
+
+                
                 # mention.reply(imgur_link)
                 # self.remove_local_image()
             else:
                 print('\n\nError in processing requests')
-                message += '\n\nError in processing requests'
-                mention.reply(message) 
-                
-            '''
-            there is a limit to how often you can do this
-            comment the mention.reply line when testing, and only want to see prints
-            '''
-        else:
-            print('No images were found')
-            # mention.reply(message)    
-
+                # message += '\n\nError in processing requests'
+                # mention.reply(message) 
+                    
     def remove_local_image(self): 
         os.remove('local-image.jpg')
         if os.path.exists('local-image.jpg') is False: 
@@ -260,42 +270,39 @@ class reddit_bot:
             print("Marked comments read: ", read_comments)
 
     def run(self):
-        found_images = []
         print("Bot running...")
+        found_images = []
+        flags = []
+        
         self.mark_r() #prevents responding to comments that were made while bot was asleep
 
         while(True):
             self.comments = self.reddit.inbox.unread(limit=None)
             #must reinstantiate the unread stream or else it won't enter loop below
-
             for comment in self.comments:
                 if comment and isinstance(comment,praw.models.reddit.comment.Comment) and ("u/PhotoSenseBot" in comment.body) :
-                    msg,_,found_images = self.checkout_mention(comment)
-                    print("***Message:\n", msg, "\nEnd of Message***=============================\n\n")
-                    if (len(msg) > 0):
-                        self.reply(comment, msg, found_images)
+                    msg,_,found_images,flags = self.checkout_mention(comment) 
+                    if(len(found_images) > 0): 
+                        self.reply(comment, msg, found_images, flags)
                     self.reddit.inbox.mark_read([comment])
                 break
 
-def upload_to_imgur(images):
-    if(len(images) > 0): 
-        print('uploading images to imgur: \n')
-        print(images)
+def upload_to_imgur(images): 
+    print('uploading images to imgur: \n')
+    print(images)
 
-        imgur_links = []
-        i =  0
-        client_id = get_client_id()
+    imgur_links = []
+    client_id = os.getenv('IMGUR_CLIENT_ID')
+    i =  0
 
-        for image in images:  
-            path = images[i]
-            im = pyimgur.Imgur(client_id)
-            uploaded_image = im.upload_image(path, title="Uploaded with PyImgur")
-            imgur_links.append(uploaded_image.link)
-            i += 1
+    for image in images:  
+        path = images[i]
+        im = pyimgur.Imgur(client_id)
+        uploaded_image = im.upload_image(path, title="Uploaded with PyImgur")
+        imgur_links.append(uploaded_image.link)
+        i += 1
 
-        return imgur_links
-    else:
-        return []
+    return imgur_links
 
 def mask_to_image(pixels): 
     arr = np.zeros([len(pixels), len(pixels[0]), 3], dtype=np.uint8)
@@ -307,7 +314,7 @@ def mask_to_image(pixels):
                 arr[i, j] = [255, 255, 255]
     return Image.fromarray(arr)
 
-def main():
+def main():   
     bot = reddit_bot()
     bot.run()
 
