@@ -41,7 +41,7 @@ class reddit_bot:
             'cmds': 'view bot commands',
             'rmv': 'remove parent comment with censored image',
             'px': 'apply the pixel sorting algorithm',
-            'sb': 'apply the simple blurring algorithm', 
+            'sb': 'apply the simple blurring algorithm (gaussian blur)', 
             'pz': 'apply the pixelization algorithm',
             'bb': 'apply the black bar censoring algorithm',
             'fi': 'apply the fill in censoring algorithm',
@@ -94,15 +94,12 @@ class reddit_bot:
     def checkout_mention(self, mention):
         parent_id = mention.parent()
         parent = self.reddit.submission(id=parent_id)
-
         message = ""
         images = []
-
-        # determine if the bot was mentioned in a submission that has an image 
+ 
         try:
             keys = ['.jpg', '.jpeg', '.png', '.jfif', 'gallery']
             text_only_post = parent.is_self
-
             # determine the reddit post type: text, image/video, url
             if text_only_post:
                 selftext = parent.selftext
@@ -127,22 +124,27 @@ class reddit_bot:
                         images.append(parent.url)
             
         except Exception as e:
-            print(e.__traceback__)
-            return "This bot does not reply links in comments! Only to initial image posts! :)"+ "\n\n\n"+self.info, parent_id,
+            # print('throwing exception')
+
+            # print(e.__traceback__)
+            self.delete_post(mention)
+            return "", mention.id, [], []
+            # return "This bot does not reply links in comments! Only to initial image posts! :)"+ "\n\n\n"+self.info, parent_id,
 
         if(len(images) == 0): 
             print("no image was found") 
             message += "\n\nNo image was found\n\n"
             mention.reply(message)
             return "", mention.id, [], []
+
         else: 
             comment_body = str(mention.body)
             flag_msg, flags = self.parse_flags(comment_body)
 
             if "remove" in flags:
                 print("Deleting post: ", mention.id)
-                self.delete_post(mention)
-                return "", mention.id, [], []
+                # self.delete_post(mention)
+                return "", mention.id, [], flags
             else:
                 message += flag_msg 
                 return message, parent_id, images, flags
@@ -164,7 +166,7 @@ class reddit_bot:
         # respond with all commands
         if('cmds' in flags or len(flags) == 0):
             print(message)
-            # mention.reply(message)   
+            mention.reply(message)   
         else:  
             imgur_links = []
             file_names = []
@@ -217,25 +219,23 @@ class reddit_bot:
                 # Upload image to imgur
                 imgur_links = upload_to_imgur(file_names)
                 original_image_links = upload_to_imgur(temp_images)
-
-                print('Here are your censored images ')
-                print(imgur_links)
-                print('If you are dissatisfied with an image segmentation(s), click one of the links')
-                print('below to edit an image segmentation using the PhotoSense web app')
                 
                 re_edit_images_links = []
                 for original_image in original_image_links: 
                     re_edit_images_links.append(web_app_url + original_image)
-                
-                print(re_edit_images_links)
 
-                
-                # mention.reply(imgur_link)
+                message += '\n\nHere are your censored images\n\n'
+                message += str(imgur_links) + '\n'
+                message += '\nIf you are dissatisfied with an image segmentation(s), copy and paste one of the links'
+                message += '\nbelow in your browser to edit an image segmentation using the PhotoSense web app\n\n'
+                message += str(re_edit_images_links) + '\n'  
+                print(message)
+                mention.reply(message)
                 # self.remove_local_image()
             else:
                 print('\n\nError in processing requests')
-                # message += '\n\nError in processing requests'
-                # mention.reply(message) 
+                message += '\n\nError in processing requests'
+                mention.reply(message) 
                     
     def remove_local_image(self): 
         os.remove('local-image.jpg')
@@ -251,11 +251,13 @@ class reddit_bot:
         sub_auth = sub.author #submission author
         comm_to_del = mention.parent() #delete the parent of the mentioner
         init_mentioner = comm_to_del.parent() #will be used to check if the mentioner wants to delete their own bot response
+       
         if((mention.author == sub_auth) or (mention.author == init_mentioner)) and (comm_to_del.author == "PhotoSenseBot"):
             comm_to_del.delete() # will be comm_to_del.delete()
             print("Successfully removed!")
-        else: print("Unsuccessful removal!")
-        return
+        else: 
+            print("Unsuccessful removal!")
+        
 
     #deletes all unread comments waiting in the unread stream
     def mark_r(self):
@@ -280,7 +282,7 @@ class reddit_bot:
             self.comments = self.reddit.inbox.unread(limit=None)
             #must reinstantiate the unread stream or else it won't enter loop below
             for comment in self.comments:
-                if comment and isinstance(comment,praw.models.reddit.comment.Comment) and ("u/PhotoSenseBot" in comment.body) :
+                if comment and isinstance(comment,praw.models.reddit.comment.Comment) and ("u/PhotoSenseBot" in comment.body):
                     msg,_,found_images,flags = self.checkout_mention(comment) 
                     if(len(found_images) > 0): 
                         self.reply(comment, msg, found_images, flags)
@@ -293,7 +295,7 @@ def upload_to_imgur(images):
 
     imgur_links = []
     client_id = os.getenv('IMGUR_CLIENT_ID')
-    i =  0
+    i = 0
 
     for image in images:  
         path = images[i]
