@@ -1,1 +1,4 @@
 praw.ini
+imgur/
+.env
+__pycache__
