@@ -55,11 +55,11 @@ class reddit_bot:
             flag_messages += "\n\nAll Image Censoring Commands\n\n"
             for flag in flags.keys():
                 description = flags.get(flag)
-                flag_messages += "(" + flag +")" + " " + description + "\n"
+                flag_messages += "\n(" + flag +")" + " " + description + "\n"
 
             flag_messages += "\nThe following example invokes the bot to return a censored image using " \
                 "the pixel sorting algorithm: u/PhotoSenseBot px \n" 
-            flag_messages += "Multiple censoring algorithms can be used as well. " \
+            flag_messages += "\nMultiple censoring algorithms can be used as well. " \
                 "The following example invokes the bot to return a censored image using multiple commands: u/PhotoSenseBot px sb pz"     
         else:
             arr = text.split()
