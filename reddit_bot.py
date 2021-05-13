@@ -4,8 +4,6 @@ import pyimgur
 import numpy as np
 import urllib.request
 from PIL import Image
-sys.path.insert(1, '/imgur')
-from imgur.imgur_auth import get_client_id
 from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(dotenv_path=find_dotenv())
