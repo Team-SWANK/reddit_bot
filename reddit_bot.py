@@ -106,7 +106,6 @@ class reddit_bot:
                 # check if an image was posted in the text
                 if any (key in selftext for key in keys):
                     num_images = parent.selftext.count("https://") # check how many links we have total in the text 
-                    
                     for i in range(num_images):
                         unstripped_URL = selftext.split("https://")[i+1]  # for each link, take the split section with the actual part of the link (caption removed)
                         image_URL = unstripped_URL.split(')')[0]  # strip the closing' ) ' and the rest of remaining selftext
@@ -169,8 +168,9 @@ class reddit_bot:
             mention.reply(message)   
         else:  
             imgur_links = []
-            file_names = []
-            temp_images = [] 
+            temp_censored_images = []
+            temp_images = []
+            temp_segmented_images = [] 
 
             temp_censor_url = censor_url
             total_flags = len(flags)
@@ -198,26 +198,30 @@ class reddit_bot:
 
                 # Convert each segmentation to an image file 
                 mask_to_image(res["predictions"]).save(temp_mask_image)
-                files = {'image': open(temp_image, 'rb'), 'mask': open(temp_mask_image, 'rb')}
 
-                # Call the censorship api
-                res = requests.post(temp_censor_url, files=files)
-                print('completed censoring request')
+                with open(temp_image, 'rb') as image, open(temp_mask_image, 'rb') as masked_image:    
+                    files = {'image': image, 'mask': masked_image}
+                    # add a temp masked image so it can be removed locally later on 
+                    temp_segmented_images.append(temp_mask_image)
 
-                # Convert base64 response file 
-                if res.status_code == 200: 
-                    fn = temp_censored_image
-                    img_bytes = res.json()['ImageBytes'].encode()
-                    with open(fn, 'wb') as f: 
-                        f.write(base64.decodebytes(img_bytes))
-                    i += 1
-                    file_names.append(fn)
-                else:
-                    print('response status was not equal to 200')
+                    # Call the censorship api
+                    res = requests.post(temp_censor_url, files=files)
+                    print('completed censoring request')
 
-            if(len(file_names) > 0): 
+                    # Convert base64 response file 
+                    if res.status_code == 200: 
+                        fn = temp_censored_image
+                        img_bytes = res.json()['ImageBytes'].encode()
+                        with open(fn, 'wb') as f: 
+                            f.write(base64.decodebytes(img_bytes))
+                        i += 1
+                        temp_censored_images.append(fn)
+                    else:
+                        print('response status was not equal to 200')
+
+            if(len(temp_censored_images) > 0): 
                 # Upload image to imgur
-                imgur_links = upload_to_imgur(file_names)
+                imgur_links = upload_to_imgur(temp_censored_images)
                 original_image_links = upload_to_imgur(temp_images)
                 
                 re_edit_images_links = []
@@ -226,24 +230,31 @@ class reddit_bot:
 
                 message += '\n\nHere are your censored images\n\n'
                 message += str(imgur_links) + '\n'
-                message += '\nIf you are dissatisfied with an image segmentation(s), copy and paste one of the links'
+                message += '\nIf you are unsatisfied with an image segmentation(s), copy and paste one of the links'
                 message += '\nbelow in your browser to edit an image segmentation using the PhotoSense web app\n\n'
                 message += str(re_edit_images_links) + '\n'  
                 print(message)
                 mention.reply(message)
-                # self.remove_local_image()
             else:
                 print('\n\nError in processing requests')
                 message += '\n\nError in processing requests'
                 mention.reply(message) 
-                    
-    def remove_local_image(self): 
-        os.remove('local-image.jpg')
-        if os.path.exists('local-image.jpg') is False: 
-            print('image removed locally')
-        else: 
-            print('file still exists')
 
+            # delete all locally saved images
+            self.remove_local_image(temp_segmented_images)
+            self.remove_local_image(temp_censored_images)
+            self.remove_local_image(temp_images)
+            
+                    
+    def remove_local_image(self, local_images): 
+        for local_image in local_images:
+            os.remove(local_image)
+
+            if os.path.exists(local_image) is False: 
+                print('image removed locally')
+            else: 
+                print('file still exists')
+        
     #deletes a post if
     def delete_post(self,mention):
         print("===Deleting response===")
