@@ -1,0 +1,6 @@
+# Requirements
+tweepy
+dotenv
+numpy
+pillow
+piexif
