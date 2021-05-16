@@ -4,6 +4,7 @@ import pyimgur
 import numpy as np
 import urllib.request
 from PIL import Image
+import atexit
 from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(dotenv_path=find_dotenv())
@@ -325,9 +326,13 @@ def mask_to_image(pixels):
                 arr[i, j] = [255, 255, 255]
     return Image.fromarray(arr)
 
+def restartProcess(): 
+    os.system('nohup python reddit_bot.py')
+    
 def main():   
     bot = reddit_bot()
     bot.run()
+    atexit.register(restartProcess)
 
 if __name__ == "__main__":
     main()
